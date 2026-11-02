@@ -39,6 +39,60 @@ scripts/movcheck.sh /tmp/sum mo_pass
 #   OK: generated code is mov-only (plus ret gateway)
 ```
 
+## Testing a sample program on Linux, Windows, and Apple Silicon
+
+The tool emits **32-bit x86 (i386) Linux** assembly and links it into a Linux
+ELF executable, so running the *output* needs a Linux x86 environment. The
+`x86movonly` program itself is portable C++; it's the generated binary that is
+platform-specific. Below is how to test the `sum.c` sample (expected output
+`55`) on each platform.
+
+### Linux (x86-64) — native
+
+```bash
+sudo apt-get install -y gcc-multilib g++-multilib libc6-dev-i386 lib32stdc++-13-dev
+cmake -S . -B build && cmake --build build -j
+scripts/c2mov.sh examples/sum.c /tmp/sum && /tmp/sum      # -> 55
+scripts/movcheck.sh /tmp/sum mo_pass                      # -> OK: mov-only
+ctest --test-dir build --output-on-failure                # full suite
+```
+
+### Windows — via WSL2
+
+Native Windows has no 32-bit x86 Linux toolchain, so use WSL2 (a real Linux
+kernel). In PowerShell:
+
+```powershell
+wsl --install -d Ubuntu     # first time only, then reboot and open Ubuntu
+```
+
+Then inside the Ubuntu shell, run exactly the **Linux (x86-64)** steps above.
+(Docker Desktop with the steps in the next section also works on Windows.)
+
+### Apple Silicon (macOS, arm64) — via Docker
+
+Apple Silicon cannot run 32-bit x86 Linux binaries natively (macOS isn't Linux,
+and Rosetta 2 doesn't emulate 32-bit x86), so use the included `Dockerfile`,
+which runs under the `linux/amd64` platform with QEMU:
+
+```bash
+docker build --platform linux/amd64 -t x86movonly .
+docker run --rm x86movonly                               # runs the full suite
+
+# test the sample explicitly:
+docker run --rm x86movonly bash -c \
+  'scripts/c2mov.sh examples/sum.c /tmp/sum && /tmp/sum && scripts/movcheck.sh /tmp/sum mo_pass'
+
+# test your own program (mount the current directory):
+docker run --rm -v "$PWD":/work -w /src x86movonly bash -c \
+  'scripts/c2mov.sh /work/yourfile.c /tmp/out && /tmp/out'
+```
+
+> If execution of the 32-bit binary fails under Docker Desktop, open
+> **Settings → General** and turn **off** "Use Rosetta for x86/amd64 emulation"
+> so Docker falls back to QEMU, which does handle 32-bit code. The same
+> `Dockerfile` is the simplest one-command way to test on Linux and Windows too.
+
 ## How it works
 
 See [docs/architecture.md](docs/architecture.md) for the full description. In
