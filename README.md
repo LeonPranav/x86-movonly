@@ -47,6 +47,16 @@ ELF executable, so running the *output* needs a Linux x86 environment. The
 platform-specific. Below is how to test the `sum.c` sample (expected output
 `55`) on each platform.
 
+Every case under `tests/cases/` ships three files: the input `.s`, the expected
+run-time value (`.expect`), and the **exact mov-only assembly the tool should
+produce** (`.mov.s`). `run_all.sh`/`ctest` checks all three — the program runs
+to the right value, the generated code is mov-only, and it matches the
+committed `.mov.s` byte-for-byte. The cases range from a few instructions
+(`arith`, `branch`, `loop`) up to a full bubble sort with nested loops and
+scaled array indexing (`sort`). If you intentionally change the translator,
+regenerate the expected outputs with `scripts/regen-golden.sh` and review the
+diff.
+
 ### Linux (x86-64) — native
 
 ```bash
@@ -151,7 +161,8 @@ src/                 parser.cpp, rewrite.cpp, main.cpp
 runtime/             mo_runtime.c — tables, register file, driver gateway
 scripts/             c2mov.sh (C/C++ → mov-only binary), movcheck.sh (verifier)
 examples/            sum.c, gcd.cpp
-tests/               regression cases + run_all.sh (also wired into ctest)
+tests/cases/         each case = input .s + .expect (value) + .mov.s (output)
+tests/               run_all.sh (also wired into ctest)
 ```
 
 ## License

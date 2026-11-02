@@ -11,6 +11,7 @@ work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 
 pass=0; fail=0
 for s in "$here"/tests/cases/*.s; do
+  case "$s" in *.mov.s) continue;; esac   # skip committed output files
   name="$(basename "$s" .s)"
   exp="$(cat "${s%.s}.expect")"
   "$tool" "$s" -o "$work/$name.s" 2>"$work/$name.err" || { echo "FAIL $name (translate)"; cat "$work/$name.err"; fail=$((fail+1)); continue; }
@@ -19,7 +20,15 @@ for s in "$here"/tests/cases/*.s; do
   if [ "$got" != "$exp" ]; then echo "FAIL $name: got '$got' expected '$exp'"; fail=$((fail+1)); continue; fi
   if ! bash "$here/scripts/movcheck.sh" "$work/$name" mo_pass >/dev/null; then
     echo "FAIL $name: generated code is not mov-only"; fail=$((fail+1)); continue; fi
-  echo "PASS $name -> $got (mov-only)"
+  # Golden check: the committed mov-only output must match what the tool produces.
+  gold="${s%.s}.mov.s"
+  if [ -f "$gold" ] && ! diff -q "$gold" "$work/$name.s" >/dev/null; then
+    echo "FAIL $name: produced assembly differs from committed $(basename "$gold")"
+    echo "       (regenerate with scripts/regen-golden.sh if the change is intended)"
+    diff -u "$gold" "$work/$name.s" | head -30
+    fail=$((fail+1)); continue
+  fi
+  echo "PASS $name -> $got (mov-only, output matches golden)"
   pass=$((pass+1))
 done
 
