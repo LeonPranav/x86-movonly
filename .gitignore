@@ -1,0 +1,5 @@
+/build/
+*.o
+*.mov.s
+*.mov.bin
+*.bin
