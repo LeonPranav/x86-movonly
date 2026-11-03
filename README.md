@@ -134,32 +134,47 @@ instruction permitted in the generated function is that one `ret`.
 
 ## Scope (v1)
 
-Verified working, lowered to mov-only:
+Everything below is verified working and lowered to `mov` only. The table is the
+complete list of instructions the translator currently recognises; anything not
+listed is passed through verbatim and counted in `--report` so you always know
+when a program needs something unsupported.
 
-| Category     | Instructions |
-|--------------|--------------|
-| Data move    | `movl/movb/movw`, `movzbl/movzwl`, `movsbl/movswl` |
-| Arithmetic   | `addl`, `subl`, `incl`, `decl`, `negl` |
-| Multiply     | `imull` (2-op and 3-op forms) |
-| Divide       | `divl`, `idivl`, `cltd`/`cdq` |
-| Shift/rotate | `sall`/`shll`, `shrl`, `sarl` (by immediate or `%cl`), `roll`/`rorl` (by immediate) |
-| Logic        | `andl`, `orl`, `xorl`, `notl` |
-| Compare      | `cmpl`, `testl` |
-| Control flow | `jmp`, `je/jne/jl/jle/jg/jge/jb/jbe/ja/jae/js/jns`, `ret` |
-| Addressing   | `disp(base,index,scale)`, absolute symbols, global data loads |
+| Category        | Instructions (AT&T mnemonics) | Notes |
+|-----------------|-------------------------------|-------|
+| Data move       | `movl`, `movw`, `movb` | size-aware register/memory moves |
+| Zero/sign extend| `movzbl`, `movzwl`, `movsbl`, `movswl` | byte/word → dword |
+| Add / subtract  | `addl`, `subl` | |
+| Inc / dec       | `incl`, `decl` | |
+| Negate / not    | `negl`, `notl` | |
+| Bitwise logic   | `andl`, `orl`, `xorl` | |
+| Multiply        | `imull` | two-operand (`dst *= src`) and three-operand (`dst = src * imm`); low 32 bits |
+| Divide          | `divl`, `idivl`, `cltd`/`cdq` | 32-bit dividend in `eax`; yields quotient in `eax`, remainder in `edx` |
+| Shift           | `sall`/`shll`, `shrl`, `sarl` | count by immediate **or** `%cl` |
+| Rotate          | `roll`, `rorl` | count by immediate |
+| Compare / test  | `cmpl`, `testl` | set the virtual flags used by the jumps below |
+| Unconditional   | `jmp`, `ret` | `ret` is the one gateway instruction per pass |
+| Equal / zero    | `je`/`jz`, `jne`/`jnz` | |
+| Signed compare  | `jl`/`jnge`, `jle`/`jng`, `jg`/`jnle`, `jge`/`jnl` | |
+| Unsigned compare| `jb`/`jnae`/`jc`, `jbe`/`jna`, `ja`/`jnbe`, `jae`/`jnb`/`jnc` | |
+| Sign            | `js`, `jns` | |
+| No-ops          | `nop`, `endbr32` | dropped |
+| Addressing      | `disp(base,index,scale)`, absolute symbols, global data loads | used by every memory operand above |
 
-This covers register-resident integer code — exactly what gcc/g++ produce for
-leaf functions at `-O1`. The included helper compiles with those flags.
-Multiplication is a byte-wise schoolbook product over an 8×8→16-bit table;
-division is branch-free restoring division (32 unrolled steps); variable shifts
-compose five fixed power-of-two shifts selected by the count bits — all still
-lowered to `mov` only.
+Together this covers register-resident 32-bit integer code — exactly what
+gcc/g++ produce for leaf functions at `-O1`, which the included helper compiles
+with. Multiplication is a byte-wise schoolbook product over an 8×8→16-bit table;
+division is branch-free restoring division (32 unrolled steps); a variable
+(`%cl`) shift composes five fixed power-of-two shifts selected by the count
+bits — all still lowered to `mov` only.
 
-**Not yet handled** (passed through verbatim and reported, so you always know):
-`push`/`pop`/`call`/`leave` (stack frames and function calls), one-operand
-`mull`/`imull` (full 64-bit product in `edx:eax`), `lea`, `setcc`, 8/16-bit
-arithmetic, and floating point. These are the roadmap —
-see [docs/architecture.md](docs/architecture.md#roadmap).
+**Not yet handled** (passed through verbatim and reported): `pushl`/`popl`/
+`call`/`leave` (stack frames and function calls), `leal`, one-operand `mull`/
+`imull` (full 64-bit product in `edx:eax`), add/subtract-with-carry (`adcl`,
+`sbbl`), `setcc`/`cmovcc`, double shifts/rotate-through-carry (`shld`, `shrd`,
+`rcl`, `rcr`) and rotate by `%cl`, bit instructions (`bt`, `bsf`, …), string ops
+(`movs`/`stos`/`rep`), 8/16-bit arithmetic, and floating point (x87 and SSE).
+These are the roadmap — see
+[docs/architecture.md](docs/architecture.md#roadmap).
 
 ## Repository layout
 
