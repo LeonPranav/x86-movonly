@@ -93,13 +93,39 @@ translated program's own instructions — all of `mo_pass` except that `ret` —
 are `mov`. `scripts/movcheck.sh` disassembles the function and fails if any
 non-`mov`, non-`ret` instruction appears.
 
+## Multiply, divide and shift lowering
+
+These share the same "tables + address arithmetic" discipline as the rest of
+the ALU and add nothing non-`mov` to the generated code:
+
+- **Multiply** (`imull`, 2-/3-operand): a byte-wise schoolbook product. An
+  `8×8 → 16-bit` table (`mo_mul8`) gives each partial product `a[i]*b[j]`,
+  which is placed at byte offset `i+j` and summed with the existing `mo_add`
+  carry-propagating adder. Only the low 32 bits are kept.
+- **Shifts** (`sall`/`shll`, `shrl`, `sarl`): a shift of `k` splits into a
+  whole-byte move plus a sub-byte shift. Two `256·8`-entry tables (`mo_shl8`,
+  `mo_shr8`) shift one byte by `0..7`; adjacent bytes are OR-ed to carry bits
+  across byte boundaries, and the arithmetic variant feeds a sign-fill byte in
+  at the top. A **variable** shift (`%cl`) composes five fixed shifts of
+  `1,2,4,8,16`, each applied or skipped by selecting on one bit of the count —
+  a branch-free `select` done with an indexed `mov`.
+- **Divide** (`divl`/`idivl` + `cltd`/`cdq`): branch-free **restoring
+  division**, 32 unrolled iterations of shift-in / trial-subtract / select,
+  using the adder, the unsigned-compare helper and the `select` primitive.
+  Signed division wraps the unsigned core with sign-adjust/negate steps, and
+  `cltd` is a `select` on the sign bit of `eax`.
+
+All of the above use a private scratch region (`mo_m`, `mo_mb`) for their
+intermediate values, so the guarded-write discipline for architecturally
+visible state is unchanged.
+
 ## Roadmap
 
 1. **Stack & calls**: `push`/`pop`/`call`/`leave` and an extern "call gateway"
    so full gcc `-O0` output and libc calls (e.g. `printf`) work — this unlocks
    translating whole programs, not just single register-resident functions.
-2. **More ALU**: shifts, `imul`/`mul`/`div` (table- and shift-add based),
-   `setcc`, `cmovcc`, 8/16-bit arithmetic.
+2. **Remaining ALU**: one-operand `mull`/`imull` (full 64-bit `edx:eax`
+   product), `setcc`, `cmovcc`, 8/16-bit arithmetic.
 3. **`lea`** via the address engine.
 4. **Object/ELF input** (disassemble-then-rewrite) in addition to assembly text.
 5. **Floating point** via a mov-only soft-float path (large; last).

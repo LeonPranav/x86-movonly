@@ -140,6 +140,9 @@ Verified working, lowered to mov-only:
 |--------------|--------------|
 | Data move    | `movl/movb/movw`, `movzbl/movzwl`, `movsbl/movswl` |
 | Arithmetic   | `addl`, `subl`, `incl`, `decl`, `negl` |
+| Multiply     | `imull` (2-op and 3-op forms) |
+| Divide       | `divl`, `idivl`, `cltd`/`cdq` |
+| Shift/rotate | `sall`/`shll`, `shrl`, `sarl` (by immediate or `%cl`), `roll`/`rorl` (by immediate) |
 | Logic        | `andl`, `orl`, `xorl`, `notl` |
 | Compare      | `cmpl`, `testl` |
 | Control flow | `jmp`, `je/jne/jl/jle/jg/jge/jb/jbe/ja/jae/js/jns`, `ret` |
@@ -147,11 +150,16 @@ Verified working, lowered to mov-only:
 
 This covers register-resident integer code — exactly what gcc/g++ produce for
 leaf functions at `-O1`. The included helper compiles with those flags.
+Multiplication is a byte-wise schoolbook product over an 8×8→16-bit table;
+division is branch-free restoring division (32 unrolled steps); variable shifts
+compose five fixed power-of-two shifts selected by the count bits — all still
+lowered to `mov` only.
 
 **Not yet handled** (passed through verbatim and reported, so you always know):
-`push`/`pop`/`call`/`leave` (stack frames and function calls), `imul`/`mul`/
-`div`, shifts, `lea`, `setcc`, 8/16-bit arithmetic, and floating point. These
-are the roadmap — see [docs/architecture.md](docs/architecture.md#roadmap).
+`push`/`pop`/`call`/`leave` (stack frames and function calls), one-operand
+`mull`/`imull` (full 64-bit product in `edx:eax`), `lea`, `setcc`, 8/16-bit
+arithmetic, and floating point. These are the roadmap —
+see [docs/architecture.md](docs/architecture.md#roadmap).
 
 ## Repository layout
 

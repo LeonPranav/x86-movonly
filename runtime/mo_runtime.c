@@ -36,6 +36,8 @@ uint8_t  mo_active;       /* 1 while the currently-selected block is active  */
 uint32_t mo_ptrtab[2];    /* [0]=discard/safe ptr, [1]=real ptr; idx=active  */
 uint8_t  mo_fe, mo_fltu, mo_flts, mo_fsf;  /* compare/test result flags      */
 uint8_t  mo_tb[8];        /* scratch bytes for boolean flag combination      */
+uint32_t mo_m[24];        /* workspace dwords for multiply / divide / shift  */
+uint8_t  mo_mb[8];        /* workspace bytes for multiply / divide / shift   */
 
 #define MO_HALT 0xFFFFFFFFu
 
@@ -50,6 +52,11 @@ uint8_t  mo_xor[1 << 16];
 /* equality/compare helpers over whole bytes: index=(a<<8)|b -> 0/1 */
 uint8_t  mo_eqb[1 << 16];   /* a == b                                        */
 uint8_t  mo_ltb[1 << 16];   /* a <  b  (unsigned)                            */
+/* 8x8 -> 16-bit product: index=(a<<8)|b */
+uint16_t mo_mul8[1 << 16];
+/* per-byte sub-shifts, index=(r<<8)|byte, r=0..7 : (byte<<r)&0xff, byte>>r   */
+uint8_t  mo_shl8[8 << 8];
+uint8_t  mo_shr8[8 << 8];
 
 void mo_init(void) {
     for (int c = 0; c < 2; ++c)
@@ -71,6 +78,12 @@ void mo_init(void) {
             mo_xor[i] = (uint8_t)(a ^ b);
             mo_eqb[i] = (a == b) ? 1 : 0;
             mo_ltb[i] = (a <  b) ? 1 : 0;
+            mo_mul8[i] = (uint16_t)(a * b);
+        }
+    for (int r = 0; r < 8; ++r)
+        for (int byte = 0; byte < 256; ++byte) {
+            mo_shl8[(r << 8) | byte] = (uint8_t)((byte << r) & 0xff);
+            mo_shr8[(r << 8) | byte] = (uint8_t)(byte >> r);
         }
 
     /* ESP near the top of the dedicated stack region, 16-byte aligned-ish. */
