@@ -173,6 +173,7 @@ tests/cases/         each case = input .s + .expect (value) + .mov.s (output)
 tests/               run_all.sh (also wired into ctest)
 ```
 
-## License
+## Future translation ideas
 
-MIT — see [LICENSE](LICENSE).
+- Function calls
+- Stack
